@@ -32,6 +32,7 @@
     "appId": "com.alencarleandro.leda",
     "productName": "L.E.D.A",
     "asar": true,
+    "electronDist": "node_modules/electron/dist",
     "files": ["dist/**/*", "electron/**/*", "package.json"],
     "directories": { "output": "release" },
     "win": {

@@ -1,4 +1,5 @@
 const path = require('node:path')
+const { execFile } = require('node:child_process')
 const { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, session, shell, Tray } = require('electron')
 const { HealthMonitor } = require('./monitoring.cjs')
 
@@ -9,14 +10,13 @@ let mainWindow = null
 let monitor = null
 let tray = null
 let isQuitting = false
+const WINDOWS_RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
+const WINDOWS_RUN_VALUE = 'LEDA Health Monitor'
 
 function createTrayIcon() {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-      <rect width="32" height="32" rx="7" fill="#f3c735"/>
-      <path d="M5 17h6l3-9 4.5 16 3-10 1.8 3H27" fill="none" stroke="#101214" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/>
-    </svg>`
-  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`)
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray-icon.png'))
+  if (icon.isEmpty()) throw new Error('Não foi possível carregar o ícone da bandeja.')
+  return icon.resize({ width: 16, height: 16 })
 }
 
 function getTrayStatus(snapshot = monitor?.getSnapshot()) {
@@ -123,12 +123,21 @@ function createWindow({ show = true } = {}) {
 
 function applyAutoLaunch(enabled) {
   if (!app.isPackaged) return
+  const startupArgs = ['--start-hidden']
   app.setLoginItemSettings({
     openAtLogin: Boolean(enabled),
-    openAsHidden: Boolean(enabled),
+    enabled: Boolean(enabled),
+    name: 'LEDA Health Monitor',
     path: process.execPath,
-    args: ['--start-hidden'],
+    args: startupArgs,
   })
+
+  if (process.platform === 'win32') {
+    const args = enabled
+      ? ['add', WINDOWS_RUN_KEY, '/v', WINDOWS_RUN_VALUE, '/t', 'REG_SZ', '/d', `"${process.execPath}" --start-hidden`, '/f']
+      : ['delete', WINDOWS_RUN_KEY, '/v', WINDOWS_RUN_VALUE, '/f']
+    execFile('reg.exe', args, { windowsHide: true }, () => {})
+  }
 }
 
 function sendSnapshot(snapshot = monitor?.getSnapshot()) {
