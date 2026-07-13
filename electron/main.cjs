@@ -1,5 +1,5 @@
 const path = require('node:path')
-const { app, BrowserWindow, ipcMain, Notification, session, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, session, shell, Tray } = require('electron')
 const { HealthMonitor } = require('./monitoring.cjs')
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
@@ -7,7 +7,69 @@ if (!hasSingleInstanceLock) app.quit()
 
 let mainWindow = null
 let monitor = null
+let tray = null
 let isQuitting = false
+
+function createTrayIcon() {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="7" fill="#f3c735"/>
+      <path d="M5 17h6l3-9 4.5 16 3-10 1.8 3H27" fill="none" stroke="#101214" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/>
+    </svg>`
+  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`)
+}
+
+function getTrayStatus(snapshot = monitor?.getSnapshot()) {
+  if (!snapshot || snapshot.summary.total === 0) return 'Nenhuma aplicação monitorada'
+  const { online, degraded, offline, total } = snapshot.summary
+  if (offline) return `${offline} aplicação(ões) indisponível(is)`
+  if (degraded) return `${degraded} aplicação(ões) com desempenho degradado`
+  return `${online}/${total} aplicações operacionais`
+}
+
+function buildTrayMenu(snapshot = monitor?.getSnapshot()) {
+  const settings = snapshot?.settings || monitor?.state.settings
+  return Menu.buildFromTemplate([
+    { label: 'L.E.D.A — Health Monitor', enabled: false },
+    { label: getTrayStatus(snapshot), enabled: false },
+    { type: 'separator' },
+    { label: 'Abrir painel', click: () => createWindow({ show: true }) },
+    { label: 'Verificar tudo agora', click: () => monitor?.checkAll() },
+    { type: 'separator' },
+    {
+      label: 'Iniciar com o Windows',
+      type: 'checkbox',
+      checked: Boolean(settings?.startWithSystem),
+      click: (item) => {
+        const updated = monitor?.updateSettings({ startWithSystem: item.checked })
+        if (updated) applyAutoLaunch(updated.startWithSystem)
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Encerrar L.E.D.A',
+      click: () => {
+        isQuitting = true
+        app.quit()
+      },
+    },
+  ])
+}
+
+function updateTray(snapshot = monitor?.getSnapshot()) {
+  if (!tray) return
+  tray.setToolTip(`L.E.D.A — ${getTrayStatus(snapshot)}`)
+  tray.setContextMenu(buildTrayMenu(snapshot))
+}
+
+function createTray() {
+  if (tray) return tray
+  tray = new Tray(createTrayIcon())
+  tray.on('click', () => createWindow({ show: true }))
+  tray.on('double-click', () => createWindow({ show: true }))
+  updateTray()
+  return tray
+}
 
 function createWindow({ show = true } = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -63,12 +125,14 @@ function applyAutoLaunch(enabled) {
   if (!app.isPackaged) return
   app.setLoginItemSettings({
     openAtLogin: Boolean(enabled),
+    openAsHidden: Boolean(enabled),
     path: process.execPath,
     args: ['--start-hidden'],
   })
 }
 
 function sendSnapshot(snapshot = monitor?.getSnapshot()) {
+  updateTray(snapshot)
   if (mainWindow && !mainWindow.isDestroyed() && snapshot) {
     mainWindow.webContents.send('leda:snapshot', snapshot)
   }
@@ -113,6 +177,7 @@ app.whenReady().then(() => {
   monitor.on('snapshot', sendSnapshot)
   registerIpc()
   applyAutoLaunch(monitor.state.settings.startWithSystem)
+  createTray()
   monitor.start()
 
   const startHidden = process.argv.includes('--start-hidden')
@@ -124,4 +189,6 @@ app.on('activate', () => createWindow({ show: true }))
 app.on('before-quit', () => {
   isQuitting = true
   monitor?.stop()
+  tray?.destroy()
+  tray = null
 })

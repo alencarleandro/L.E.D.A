@@ -16,7 +16,7 @@ Monitoramento local, contínuo e visual da saúde das suas aplicações.
 
 A **L.E.D.A** é uma sentinela desktop para Windows que acompanha endpoints HTTP/HTTPS, identifica indisponibilidade ou lentidão e mantém você informado sobre o estado das suas aplicações.
 
-As verificações continuam em segundo plano mesmo quando a janela é fechada. Quando uma aplicação cai, apresenta degradação ou volta ao normal, a L.E.D.A pode emitir uma notificação nativa do Windows.
+As verificações continuam em segundo plano mesmo quando a janela é fechada. A L.E.D.A permanece minimizada na bandeja do sistema, de onde você pode abrir o painel, disparar uma nova varredura ou encerrar o monitor. Quando uma aplicação cai, apresenta degradação ou volta ao normal, a L.E.D.A pode emitir uma notificação nativa do Windows.
 
 ## Principais recursos
 
@@ -31,7 +31,7 @@ As verificações continuam em segundo plano mesmo quando a janela é fechada. Q
 - Linha do tempo de mudanças de estado
 - Notificações nativas do Windows
 - Execução contínua em segundo plano
-- Inicialização automática junto com o Windows
+- Inicialização automática junto com o Windows, iniciando minimizada na bandeja do sistema
 - Armazenamento local, sem envio de dados para serviços externos
 
 ## Como funciona
