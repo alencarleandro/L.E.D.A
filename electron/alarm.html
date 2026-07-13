@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alerta crítico — L.E.D.A</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; overflow: hidden; color: #fff6f4; background: radial-gradient(circle at center, #531410 0, #260807 48%, #100303 100%); font-family: "Segoe UI", Arial, sans-serif; }
+      .warning { width: min(780px, calc(100vw - 48px)); text-align: center; }
+      .signal { width: 128px; height: 128px; display: grid; place-items: center; margin: 0 auto 32px; color: #1e0605; background: #ff5d4f; border-radius: 50%; box-shadow: 0 0 0 18px rgba(255,93,79,.12), 0 0 90px rgba(255,63,46,.55); font-size: 70px; animation: pulse 1s ease-in-out infinite alternate; }
+      .eyebrow { color: #ffafa8; font: 700 14px/1 Consolas, monospace; letter-spacing: .19em; }
+      h1 { margin: 15px 0 15px; font-size: clamp(38px, 6vw, 76px); line-height: 1; letter-spacing: -.05em; }
+      p { max-width: 620px; margin: 0 auto; color: #f5bbb6; font-size: clamp(18px, 2vw, 25px); line-height: 1.5; }
+      button { margin-top: 42px; padding: 18px 28px; color: #260807; background: #ffd033; border: 0; border-radius: 7px; box-shadow: 0 12px 34px rgba(0,0,0,.34); font: 800 16px "Segoe UI", Arial, sans-serif; cursor: pointer; }
+      button:hover, button:focus-visible { background: #ffe06a; outline: 3px solid #fff; outline-offset: 4px; }
+      .hint { margin-top: 20px; color: #d5817a; font-size: 13px; }
+      @keyframes pulse { to { transform: scale(1.08); box-shadow: 0 0 0 34px rgba(255,93,79,.04), 0 0 120px rgba(255,63,46,.75); } }
+    </style>
+  </head>
+  <body>
+    <main class="warning">
+      <div class="signal">!</div>
+      <div class="eyebrow" id="kind">ALERTA CRÍTICO</div>
+      <h1 id="title">Aplicação fora do ar</h1>
+      <p id="message">A L.E.D.A detectou uma indisponibilidade e continuará emitindo o alarme até você confirmar.</p>
+      <button id="silence" autofocus>Silenciar alarme</button>
+      <div class="hint">Sirene ativa. Este alerta permanece à frente das demais janelas.</div>
+    </main>
+    <script>
+      const params = new URLSearchParams(location.search)
+      const simulation = params.get('simulation') === 'true'
+      const service = params.get('service') || 'Aplicação monitorada'
+      if (simulation) {
+        document.querySelector('#kind').textContent = 'SIMULAÇÃO DE ALERTA'
+        document.querySelector('#title').textContent = 'Teste de alarme crítico'
+        document.querySelector('#message').textContent = 'Esta é uma simulação. Nenhuma aplicação foi marcada como indisponível.'
+      } else {
+        document.querySelector('#title').textContent = `${service} está fora do ar`
+      }
+      const audioContext = new AudioContext()
+      let sirenTimer
+
+      function tone(frequency, startAt, duration) {
+        const oscillator = audioContext.createOscillator()
+        const gain = audioContext.createGain()
+        oscillator.type = 'square'
+        oscillator.frequency.setValueAtTime(frequency, startAt)
+        gain.gain.setValueAtTime(0.0001, startAt)
+        gain.gain.exponentialRampToValueAtTime(0.34, startAt + 0.025)
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration)
+        oscillator.connect(gain).connect(audioContext.destination)
+        oscillator.start(startAt)
+        oscillator.stop(startAt + duration + 0.03)
+      }
+
+      function playSiren() {
+        audioContext.resume()
+        const now = audioContext.currentTime
+        tone(880, now, 0.3)
+        tone(1320, now + 0.36, 0.3)
+        sirenTimer = setTimeout(playSiren, 900)
+      }
+
+      playSiren()
+      document.querySelector('#silence').addEventListener('click', () => {
+        clearTimeout(sirenTimer)
+        audioContext.close()
+        window.ledaAlarm.silence()
+      })
+    </script>
+  </body>
+</html>

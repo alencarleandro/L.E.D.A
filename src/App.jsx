@@ -47,7 +47,7 @@ const DEMO_SNAPSHOT = {
     { id: 'inc-1', serviceId: 'demo-web', serviceName: 'Portal do Cliente', fromStatus: 'online', toStatus: 'degraded', message: 'Tempo de resposta acima do limite', createdAt: new Date(DEMO_NOW - 24 * 60_000).toISOString() },
     { id: 'inc-2', serviceId: 'demo-api', serviceName: 'API Principal', fromStatus: 'offline', toStatus: 'online', message: 'HTTP 200', createdAt: new Date(DEMO_NOW - 3.4 * 60 * 60_000).toISOString() },
   ],
-  settings: { checkIntervalSec: 30, timeoutMs: 5000, slowThresholdMs: 1200, startWithSystem: true, notifications: true },
+  settings: { checkIntervalSec: 30, timeoutMs: 5000, slowThresholdMs: 1200, startWithSystem: true, notifications: true, criticalAlarm: true },
   summary: { total: 3, online: 2, degraded: 1, offline: 0, unknown: 0, avgLatency: 588, uptime24h: 99.9 },
   generatedAt: new Date().toISOString(),
 }
@@ -77,6 +77,14 @@ function createDemoBridge(setSnapshot) {
       DEMO_SNAPSHOT.settings = { ...DEMO_SNAPSHOT.settings, ...settings }
       setSnapshot({ ...DEMO_SNAPSHOT, settings: { ...DEMO_SNAPSHOT.settings } })
       return DEMO_SNAPSHOT.settings
+    },
+    silenceAlarm: async () => {
+      DEMO_SNAPSHOT.alarm = { active: false, silenced: true }
+      setSnapshot({ ...DEMO_SNAPSHOT })
+    },
+    testAlarm: async () => {
+      DEMO_SNAPSHOT.alarm = { active: true, simulation: true }
+      setSnapshot({ ...DEMO_SNAPSHOT })
     },
     onSnapshot: () => () => {},
     quit: async () => {},
@@ -235,7 +243,7 @@ function IncidentsView({ incidents }) {
   return <section className="page-section"><div className="page-intro"><div><span className="eyebrow">EVENTOS</span><h1>Histórico de incidentes</h1><p>Mudanças de disponibilidade e desempenho registradas pela L.E.D.A.</p></div></div><div className="panel incident-panel">{incidents.length ? <IncidentList incidents={incidents} /> : <div className="empty-state small"><ShieldCheck size={34} /><h3>Nenhum incidente registrado</h3><p>As mudanças de estado aparecerão aqui.</p></div>}</div></section>
 }
 
-function SettingsView({ settings, onSave, onQuit, isDemo }) {
+function SettingsView({ settings, onSave, onQuit, onTestAlarm, isDemo }) {
   const [form, setForm] = useState(settings)
   const [saved, setSaved] = useState(false)
   useEffect(() => setForm(settings), [settings])
@@ -253,6 +261,8 @@ function SettingsView({ settings, onSave, onQuit, isDemo }) {
         <div className="panel settings-panel"><div className="panel-title"><Bell size={18} /><div><h2>Sistema e alertas</h2><p>Mantenha a sentinela ativa em segundo plano.</p></div></div>
           <label className="toggle-row"><span><strong>Iniciar com o Windows</strong><small>{isDemo ? 'Será aplicado na versão instalada.' : 'A L.E.D.A inicia minimizada e continua monitorando.'}</small></span><input type="checkbox" checked={form.startWithSystem} onChange={(e) => update('startWithSystem', e.target.checked)} /></label>
           <label className="toggle-row"><span><strong>Notificações do sistema</strong><small>Receba alertas quando uma aplicação cair ou se recuperar.</small></span><input type="checkbox" checked={form.notifications} onChange={(e) => update('notifications', e.target.checked)} /></label>
+          <label className="toggle-row"><span><strong>Alarme crítico quando ficar offline</strong><small>Emite um som recorrente, destaca a janela e exige que você silencie o alerta.</small></span><input type="checkbox" checked={form.criticalAlarm ?? true} onChange={(e) => update('criticalAlarm', e.target.checked)} /></label>
+          <div className="alarm-test-row"><span><strong>Simulador de alerta</strong><small>Dispara um alerta de teste sem alterar o status das aplicações.</small></span><button type="button" className="secondary-button" onClick={onTestAlarm}><Bell size={15} /> Testar alarme</button></div>
         </div>
         <div className="settings-actions"><button type="submit" className="primary-button">{saved ? <Check size={17} /> : <Settings size={17} />} {saved ? 'Configurações salvas' : 'Salvar configurações'}</button>{!isDemo && <button type="button" className="danger-button" onClick={onQuit}><LogOut size={16} /> Encerrar L.E.D.A</button>}</div>
       </form>
@@ -286,6 +296,8 @@ export default function App() {
   const saveService = async (form) => { if (modal?.id) await api.updateService(modal.id, form); else await api.addService(form); notify(modal?.id ? 'Aplicação atualizada.' : 'Aplicação adicionada ao monitoramento.') }
   const deleteService = async (service) => { if (!window.confirm(`Remover “${service.name}” do monitoramento?`)) return; await api.removeService(service.id); notify('Aplicação removida.') }
   const checkNow = async (id) => { await api.checkNow(id); notify(id ? 'Verificação concluída.' : 'Varredura completa concluída.') }
+  const silenceAlarm = async () => { await api.silenceAlarm(); notify('Alarme silenciado. Ele será reativado quando todos os serviços voltarem ao normal.') }
+  const testAlarm = async () => { await api.testAlarm(); notify('Simulação de alerta iniciada. Use “Silenciar alarme” para parar o som.') }
 
   if (!snapshot) return <div className="app-loader"><div className="loader-mark"><Activity size={30} /></div><strong>L.E.D.A</strong><span>Inicializando diagnóstico...</span></div>
 
@@ -303,12 +315,13 @@ export default function App() {
       </aside>
       {sidebarOpen && <button className="sidebar-scrim" aria-label="Fechar menu" onClick={() => setSidebarOpen(false)} />}
       <main className="main-area">
+        {snapshot.alarm?.active && <div className="critical-alarm" role="alert"><AlertTriangle size={18} /><span><strong>{snapshot.alarm.simulation ? 'SIMULAÇÃO DE ALERTA' : 'ALERTA CRÍTICO'}</strong> {snapshot.alarm.simulation ? 'Este é um teste. O alarme continuará tocando até ser silenciado.' : 'Uma aplicação está offline. O alarme continuará tocando até ser silenciado.'}</span><button className="secondary-button" onClick={silenceAlarm}>Silenciar alarme</button></div>}
         <header className="topbar"><div className="topbar-left"><button className="mobile-menu icon-button" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu"><Menu size={20} /></button><div className="breadcrumb"><span>LEDA</span><ChevronRight size={13} /><strong>{viewTitle}</strong></div></div><div className="topbar-actions"><label className="search-box"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar aplicação..." aria-label="Buscar aplicação" /></label>{isDemo && <span className="demo-badge">PRÉVIA</span>}<button className="icon-button notification-button" aria-label="Notificações"><Bell size={18} />{snapshot.summary.offline + snapshot.summary.degraded > 0 && <span />}</button><button className="primary-button compact top-add" onClick={() => setModal({})}><Plus size={16} /> Nova aplicação</button></div></header>
         <div className="content">
           {view === 'overview' && <Overview snapshot={snapshot} onAdd={() => setModal({})} onEdit={setModal} onDelete={deleteService} onCheck={checkNow} setView={setView} />}
           {view === 'applications' && <ApplicationsView snapshot={snapshot} query={query} onAdd={() => setModal({})} onEdit={setModal} onDelete={deleteService} onCheck={checkNow} />}
           {view === 'incidents' && <IncidentsView incidents={snapshot.incidents} />}
-          {view === 'settings' && <SettingsView settings={snapshot.settings} onSave={(settings) => api.updateSettings(settings)} onQuit={() => api.quit()} isDemo={isDemo} />}
+          {view === 'settings' && <SettingsView settings={snapshot.settings} onSave={(settings) => api.updateSettings(settings)} onTestAlarm={testAlarm} onQuit={() => api.quit()} isDemo={isDemo} />}
         </div>
       </main>
       {modal && <ServiceModal service={modal.id ? modal : null} onClose={() => setModal(null)} onSave={saveService} />}

@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('leda', {
   removeService: (id) => ipcRenderer.invoke('leda:remove-service', id),
   checkNow: (id) => ipcRenderer.invoke('leda:check-now', id),
   updateSettings: (settings) => ipcRenderer.invoke('leda:update-settings', settings),
+  silenceAlarm: () => ipcRenderer.invoke('leda:silence-alarm'),
+  testAlarm: () => ipcRenderer.invoke('leda:test-alarm'),
   quit: () => ipcRenderer.invoke('leda:quit'),
   onSnapshot: (callback) => {
     const listener = (_event, snapshot) => callback(snapshot)

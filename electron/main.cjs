@@ -3,13 +3,18 @@ const { execFile } = require('node:child_process')
 const { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, session, shell, Tray } = require('electron')
 const { HealthMonitor } = require('./monitoring.cjs')
 
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
 let mainWindow = null
 let monitor = null
 let tray = null
+let alertWindow = null
 let isQuitting = false
+let alarmTimer = null
+let alarmSilenced = false
+let alarmSimulation = false
 const WINDOWS_RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
 const WINDOWS_RUN_VALUE = 'LEDA Health Monitor'
 
@@ -140,14 +145,99 @@ function applyAutoLaunch(enabled) {
   }
 }
 
+function withAlarm(snapshot = monitor?.getSnapshot()) {
+  if (!snapshot) return snapshot
+  return {
+    ...snapshot,
+    alarm: {
+      active: Boolean(alarmTimer),
+      silenced: alarmSilenced,
+      simulation: alarmSimulation,
+    },
+  }
+}
+
 function sendSnapshot(snapshot = monitor?.getSnapshot()) {
   updateTray(snapshot)
   if (mainWindow && !mainWindow.isDestroyed() && snapshot) {
-    mainWindow.webContents.send('leda:snapshot', snapshot)
+    mainWindow.webContents.send('leda:snapshot', withAlarm(snapshot))
+  }
+}
+
+function stopCriticalAlarm({ rearm = false } = {}) {
+  if (alarmTimer) clearInterval(alarmTimer)
+  alarmTimer = null
+  alarmSimulation = false
+  if (alertWindow && !alertWindow.isDestroyed()) alertWindow.destroy()
+  alertWindow = null
+  if (rearm) alarmSilenced = false
+  mainWindow?.flashFrame(false)
+}
+
+function createCriticalAlertWindow(service, simulation) {
+  if (alertWindow && !alertWindow.isDestroyed()) return alertWindow
+  alertWindow = new BrowserWindow({
+    width: 1000,
+    height: 640,
+    minWidth: 800,
+    minHeight: 520,
+    show: false,
+    fullscreen: true,
+    frame: false,
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    backgroundColor: '#190605',
+    title: 'L.E.D.A • Alerta crítico',
+    webPreferences: {
+      preload: path.join(__dirname, 'alarm-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  })
+  alertWindow.setAlwaysOnTop(true, 'screen-saver')
+  alertWindow.loadFile(path.join(__dirname, 'alarm.html'), {
+    query: { service: service.name, simulation: String(simulation) },
+  })
+  alertWindow.once('ready-to-show', () => {
+    alertWindow.setFullScreen(true)
+    alertWindow.show()
+    alertWindow.focus()
+  })
+  alertWindow.on('close', (event) => {
+    event.preventDefault()
+    alertWindow.focus()
+  })
+  alertWindow.on('closed', () => { alertWindow = null })
+  return alertWindow
+}
+
+function startCriticalAlarm(service, { force = false, simulation = false } = {}) {
+  if ((!monitor?.state.settings.criticalAlarm && !force) || alarmSilenced || alarmTimer) return
+  alarmSimulation = simulation
+  const alert = () => {
+    shell.beep()
+    mainWindow?.flashFrame(true)
+  }
+  alert()
+  alarmTimer = setInterval(alert, 4000)
+  createCriticalAlertWindow(service, simulation)
+  if (Notification.isSupported()) {
+    new Notification({
+    title: `L.E.D.A • ${simulation ? 'SIMULAÇÃO DE ALERTA' : `ALERTA CRÍTICO: ${service.name} offline`}`,
+    body: simulation ? 'Teste de alarme ativo. Abra a L.E.D.A para silenciar.' : 'Alarme ativo. Abra a L.E.D.A para silenciar o aviso.',
+      silent: false,
+    }).show()
   }
 }
 
 function showSystemNotification({ service, incident, check }) {
+  const snapshot = monitor?.getSnapshot()
+  if (snapshot?.summary.offline) startCriticalAlarm(service)
+  else stopCriticalAlarm({ rearm: true })
+
   if (!monitor?.state.settings.notifications || !Notification.isSupported()) return
   const recovered = incident.toStatus === 'online'
   const title = recovered ? `${service.name} voltou ao normal` : `${service.name} requer atenção`
@@ -160,7 +250,7 @@ function showSystemNotification({ service, incident, check }) {
 }
 
 function registerIpc() {
-  ipcMain.handle('leda:get-snapshot', () => monitor.getSnapshot())
+  ipcMain.handle('leda:get-snapshot', () => withAlarm(monitor.getSnapshot()))
   ipcMain.handle('leda:add-service', (_event, service) => monitor.addService(service))
   ipcMain.handle('leda:update-service', (_event, id, service) => monitor.updateService(id, service))
   ipcMain.handle('leda:remove-service', (_event, id) => monitor.removeService(id))
@@ -168,7 +258,21 @@ function registerIpc() {
   ipcMain.handle('leda:update-settings', (_event, settings) => {
     const updated = monitor.updateSettings(settings)
     applyAutoLaunch(updated.startWithSystem)
+    if (!updated.criticalAlarm) stopCriticalAlarm()
+    sendSnapshot()
     return updated
+  })
+  ipcMain.handle('leda:silence-alarm', () => {
+    alarmSilenced = true
+    stopCriticalAlarm()
+    sendSnapshot()
+    return withAlarm(monitor.getSnapshot())
+  })
+  ipcMain.handle('leda:test-alarm', () => {
+    alarmSilenced = false
+    startCriticalAlarm({ name: 'Simulação de alerta' }, { force: true, simulation: true })
+    sendSnapshot()
+    return withAlarm(monitor.getSnapshot())
   })
   ipcMain.handle('leda:quit', () => {
     isQuitting = true
@@ -198,6 +302,7 @@ app.on('activate', () => createWindow({ show: true }))
 app.on('before-quit', () => {
   isQuitting = true
   monitor?.stop()
+  stopCriticalAlarm()
   tray?.destroy()
   tray = null
 })

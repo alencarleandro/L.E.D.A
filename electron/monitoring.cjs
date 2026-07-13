@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   slowThresholdMs: 1200,
   startWithSystem: true,
   notifications: true,
+  criticalAlarm: true,
 }
 
 function clamp(value, min, max, fallback) {
@@ -23,6 +24,7 @@ function normalizeSettings(settings = {}) {
     slowThresholdMs: clamp(settings.slowThresholdMs, 100, 30000, DEFAULT_SETTINGS.slowThresholdMs),
     startWithSystem: settings.startWithSystem ?? DEFAULT_SETTINGS.startWithSystem,
     notifications: settings.notifications ?? DEFAULT_SETTINGS.notifications,
+    criticalAlarm: settings.criticalAlarm ?? DEFAULT_SETTINGS.criticalAlarm,
   }
 }
 
