@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/images/leda-logo.svg" width="72" alt="Logo da L.E.D.A" />
+
 # L.E.D.A
 
 ### Live Environment Diagnostic Assistant
