@@ -1,6 +1,6 @@
 const path = require('node:path')
 const { execFile } = require('node:child_process')
-const { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, session, shell, Tray } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, screen, session, shell, Tray } = require('electron')
 const { HealthMonitor } = require('./monitoring.cjs')
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -183,6 +183,7 @@ function createCriticalAlertWindow(service, simulation) {
     minHeight: 520,
     show: false,
     fullscreen: true,
+    kiosk: true,
     frame: false,
     resizable: false,
     movable: false,
@@ -197,15 +198,16 @@ function createCriticalAlertWindow(service, simulation) {
       sandbox: false,
     },
   })
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  alertWindow.setBounds(display.bounds)
+  alertWindow.setKiosk(true)
+  alertWindow.setFullScreen(true)
   alertWindow.setAlwaysOnTop(true, 'screen-saver')
   alertWindow.loadFile(path.join(__dirname, 'alarm.html'), {
     query: { service: service.name, simulation: String(simulation) },
   })
-  alertWindow.once('ready-to-show', () => {
-    alertWindow.setFullScreen(true)
-    alertWindow.show()
-    alertWindow.focus()
-  })
+  alertWindow.show()
+  alertWindow.focus()
   alertWindow.on('close', (event) => {
     event.preventDefault()
     alertWindow.focus()
