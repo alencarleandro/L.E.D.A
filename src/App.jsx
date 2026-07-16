@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import ledaLogo from './assets/leda-logo.svg'
 import {
   Activity, AlertTriangle, Bell, Check, ChevronRight, CircleGauge, Clock3,
   ExternalLink, Gauge, LayoutDashboard, ListChecks, LoaderCircle, LogOut, Menu,
@@ -299,7 +300,7 @@ export default function App() {
   const silenceAlarm = async () => { await api.silenceAlarm(); notify('Alarme silenciado. Ele será reativado quando todos os serviços voltarem ao normal.') }
   const testAlarm = async () => { await api.testAlarm(); notify('Simulação de alerta iniciada. Use “Silenciar alarme” para parar o som.') }
 
-  if (!snapshot) return <div className="app-loader"><div className="loader-mark"><Activity size={30} /></div><strong>L.E.D.A</strong><span>Inicializando diagnóstico...</span></div>
+  if (!snapshot) return <div className="app-loader"><div className="loader-mark"><img src={ledaLogo} alt="" /></div><strong>L.E.D.A</strong><span>Inicializando diagnóstico...</span></div>
 
   const status = snapshot.summary.offline ? 'offline' : snapshot.summary.degraded ? 'degraded' : 'online'
   const viewTitle = NAV_ITEMS.find((item) => item.id === view)?.label
@@ -307,7 +308,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
-        <div className="brand"><div className="brand-mark"><Activity size={22} /></div><div><strong>L.E.D.A</strong><span>HEALTH MONITOR</span></div></div>
+        <div className="brand"><div className="brand-mark"><img src={ledaLogo} alt="Logo L.E.D.A" /></div><div><strong>L.E.D.A</strong><span>HEALTH MONITOR</span></div></div>
         <nav aria-label="Navegação principal">
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => { setView(id); setSidebarOpen(false) }}><Icon size={18} /><span>{label}</span>{id === 'incidents' && snapshot.summary.offline + snapshot.summary.degraded > 0 && <b>{snapshot.summary.offline + snapshot.summary.degraded}</b>}</button>)}
         </nav>

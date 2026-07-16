@@ -17,6 +17,7 @@ let alarmSilenced = false
 let alarmSimulation = false
 const WINDOWS_RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
 const WINDOWS_RUN_VALUE = 'LEDA Health Monitor'
+const APP_ICON_PATH = path.join(__dirname, 'assets', 'app-icon.png')
 
 function createTrayIcon() {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray-icon.png'))
@@ -93,6 +94,7 @@ function createWindow({ show = true } = {}) {
     show: false,
     backgroundColor: '#090a0b',
     title: 'L.E.D.A',
+    icon: APP_ICON_PATH,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -191,6 +193,7 @@ function createCriticalAlertWindow(service, simulation) {
     skipTaskbar: false,
     backgroundColor: '#190605',
     title: 'L.E.D.A • Alerta crítico',
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'alarm-preload.cjs'),
       contextIsolation: true,
